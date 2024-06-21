@@ -117,8 +117,8 @@ def train_model(metadata):
     svc.fit(X_train, y_train)
     acc_svc = accuracy_score(y_test, svc.predict(X_test))
     st.write(f'SVM accuracy: {acc_svc:.6f}')
-    joblib.dump(svc, './data/svc.pkl')
-    joblib.dump(encoder, './data/label_encoder.pkl')
+    joblib.dump(svc, './models/svc.pkl')
+    joblib.dump(encoder, './models/label_encoder.pkl')
     st.success("Model training completed and saved.")
 
 # Streamlit UI
@@ -193,8 +193,8 @@ if choice == "Training":
 elif choice == "Detect Face":
     st.header("Detection Mode")
     # Load models and label dictionary
-    svc = joblib.load('./data/svc.pkl')
-    encoder = joblib.load('./data/label_encoder.pkl')
+    svc = joblib.load('./models/svc.pkl')
+    encoder = joblib.load('./models/label_encoder.pkl')
 
     face_detection_model_path = st.text_input('Path to the face detection model', './models/face_detection_yunet_2023mar.onnx')
     face_recognition_model_path = st.text_input('Path to the face recognition model', './models/face_recognition_sface_2021dec.onnx')
