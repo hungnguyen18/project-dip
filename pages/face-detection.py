@@ -22,7 +22,7 @@ def save_face_images(folder_name, cap):
     while count < 150:
         ret, frame = cap.read()
         if not ret:
-            st.write("Failed to grab frame")
+            st.write("Không thể chụp khung hình")
             break
         faces = face_cascade.detectMultiScale(frame, 1.1, 4)
         for (x, y, w, h) in faces:
@@ -54,7 +54,7 @@ def load_metadata(path):
     for i in sorted(os.listdir(path)):
         for f in sorted(os.listdir(os.path.join(path, i))):
             ext = os.path.splitext(f)[1]
-            if ext == '.jpg' or ext == '.jpeg' or ext == '.bmp':
+            if ext in ['.jpg', '.jpeg', '.bmp']:
                 metadata.append(IdentityMetadata(path, i, f))
     return np.array(metadata)
 
@@ -80,12 +80,16 @@ def visualize(input, faces, fps, thickness=2):
     cv.putText(input, 'FPS: {:.2f}'.format(fps), (1, 16), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
 # Streamlit UI for Face Detection
-st.title('Face Recognition App')
-choice = st.sidebar.selectbox("Choose an action", ["Training", "Detect Face"])
+st.title('🤦 Ứng dụng Nhận diện Khuôn mặt')
+st.write("Ứng dụng này giúp bạn thu thập, huấn luyện và nhận diện khuôn mặt từ camera theo thời gian thực. Bạn có thể thu thập hình ảnh khuôn mặt để huấn luyện mô hình và sau đó sử dụng mô hình này để nhận diện khuôn mặt.")
+
+st.sidebar.title("Điều hướng")
+st.sidebar.write("Ứng dụng này giúp bạn thu thập, huấn luyện và nhận diện khuôn mặt từ camera theo thời gian thực. Bạn có thể thu thập hình ảnh khuôn mặt để huấn luyện mô hình và sau đó sử dụng mô hình này để nhận diện khuôn mặt.")
+choice = st.sidebar.selectbox("Chọn hành động", ["Huấn luyện", "Nhận diện khuôn mặt", "Xem Khuôn mặt đã Lưu"])
 
 def train_model(metadata):
     if len(set(m.name for m in metadata)) < 2:
-        st.error("Need images of at least two different people to train the model.")
+        st.error("Cần ít nhất hai người khác nhau để huấn luyện mô hình.")
         return
 
     recognizer = cv.FaceRecognizerSF.create(
@@ -116,21 +120,29 @@ def train_model(metadata):
     svc = SVC(probability=True)  # Using SVC with probability estimation
     svc.fit(X_train, y_train)
     acc_svc = accuracy_score(y_test, svc.predict(X_test))
-    st.write(f'SVM accuracy: {acc_svc:.6f}')
+    st.write(f'Độ chính xác của SVM: {acc_svc:.6f}')
     joblib.dump(svc, './models/svc.pkl')
     joblib.dump(encoder, './models/label_encoder.pkl')
-    st.success("Model training completed and saved.")
+    st.success("Huấn luyện mô hình hoàn tất và đã lưu.")
 
-# Streamlit UI
 face_cascade = cv.CascadeClassifier(cv.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
-if choice == "Training":
-    st.header("Training Mode")
+# Sidebar sections
+if choice == "Huấn luyện":
+    st.sidebar.header("Chế độ Huấn luyện")
+    st.header("Chế độ Huấn luyện")
+    st.write("""
+        ### Hướng dẫn:
+        1. Nhấn **Bắt đầu Camera** để bắt đầu chụp hình ảnh.
+        2. Khi camera đang chạy, nhấn **Lưu** và nhập tên để lưu hình ảnh khuôn mặt.
+        3. Hình ảnh khuôn mặt sẽ được lưu và hiển thị bên dưới.
+    """)
+
     if 'cap' not in st.session_state:
         st.session_state.cap = None
 
     if st.session_state.cap is None or not st.session_state.cap.isOpened():
-        start_button = st.button("Start Camera")
+        start_button = st.sidebar.button("Bắt đầu Camera")
     else:
         start_button = None
     
@@ -140,8 +152,8 @@ if choice == "Training":
 
     if 'start' in st.session_state and st.session_state.start:
         FRAME_WINDOW = st.image([])
-        stop_button = st.button("Stop Camera")
-        save_button = st.button("Save")
+        stop_button = st.sidebar.button("Dừng Camera")
+        save_button = st.sidebar.button("Lưu")
 
         if stop_button:
             st.session_state.cap.release()
@@ -153,7 +165,7 @@ if choice == "Training":
             curr_time = time.time()
             ret, frame = st.session_state.cap.read()
             if not ret:
-                st.write("Failed to grab frame")
+                st.write("Không thể chụp khung hình")
                 break
             faces = face_cascade.detectMultiScale(frame, 1.1, 4)
             for (x, y, w, h) in faces:
@@ -165,44 +177,47 @@ if choice == "Training":
             FRAME_WINDOW.image(frame, channels="BGR")
 
             if save_button:
-                name = st.text_input("Enter name for the face", key='name_input')
+                name = st.text_input("Nhập tên cho khuôn mặt", key='name_input')
                 if name:
                     folder_name = f"./data/faces/{name}"
                     create_folder(folder_name)
                     
-                    with st.spinner('Saving images...'):
+                    with st.spinner('Đang lưu hình ảnh...'):
                         saved_images = save_face_images(folder_name, st.session_state.cap)
                         st.balloons()  # Show visual feedback for success
-                        st.success(f"Saved 150 images to {folder_name}")
-                        st.write(f"Saved images for {name}")
+                        st.success(f"Đã lưu 150 hình ảnh vào {folder_name}")
+                        st.write(f"Đã lưu hình ảnh cho {name}")
 
                         # Display saved images with timestamp
-                        st.header(f"Images for {name}")
+                        st.header(f"Hình ảnh cho {name}")
                         col1, col2, col3, col4, col5 = st.columns(5)
                         cols = [col1, col2, col3, col4, col5]
                         for idx, img_path in enumerate(saved_images):
                             img = Image.open(img_path)
                             cols[idx % 5].image(img, caption=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
-                        # Train the model after saving the images
-                        metadata = load_metadata('./data/faces')
-                        train_model(metadata)
+if choice == "Nhận diện khuôn mặt":
+    st.sidebar.header("Chế độ Nhận diện")
+    st.header("Chế độ Nhận diện")
+    st.write("""
+        ### Hướng dẫn:
+        1. Đảm bảo rằng các mô hình đã được huấn luyện và lưu trước đó.
+        2. Nhập đường dẫn đến mô hình phát hiện và nhận diện khuôn mặt.
+        3. Điều chỉnh các thông số như ngưỡng điểm, ngưỡng NMS, và Top K.
+        4. Nhấn **Bắt đầu Nhận diện** để bắt đầu quá trình nhận diện khuôn mặt theo thời gian thực.
+    """)
 
-                    st.session_state.start = False
-
-elif choice == "Detect Face":
-    st.header("Detection Mode")
     # Load models and label dictionary
     svc = joblib.load('./models/svc.pkl')
     encoder = joblib.load('./models/label_encoder.pkl')
 
-    face_detection_model_path = st.text_input('Path to the face detection model', './models/face_detection_yunet_2023mar.onnx')
-    face_recognition_model_path = st.text_input('Path to the face recognition model', './models/face_recognition_sface_2021dec.onnx')
-    score_threshold = st.slider('Score Threshold', 0.0, 1.0, 0.9)
-    nms_threshold = st.slider('NMS Threshold', 0.0, 1.0, 0.3)
+    face_detection_model_path = st.text_input('Đường dẫn đến mô hình phát hiện khuôn mặt', './models/face_detection_yunet_2023mar.onnx')
+    face_recognition_model_path = st.text_input('Đường dẫn đến mô hình nhận diện khuôn mặt', './models/face_recognition_sface_2021dec.onnx')
+    score_threshold = st.slider('Ngưỡng Điểm', 0.0, 1.0, 0.9)
+    nms_threshold = st.slider('Ngưỡng NMS', 0.0, 1.0, 0.3)
     top_k = st.number_input('Top K', min_value=1, value=5000)
     
-    if st.button('Start Detection'):
+    if st.button('Bắt đầu Nhận diện'):
         cap = cv.VideoCapture(0)
         frameWidth = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
         frameHeight = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
@@ -219,11 +234,11 @@ elif choice == "Detect Face":
         tm = cv.TickMeter()
 
         FRAME_WINDOW = st.image([])
-        stop_detection = st.button('Stop Detection')
+        stop_detection = st.button('Dừng Nhận diện')
         while cap.isOpened():
             hasFrame, frame = cap.read()
             if not hasFrame:
-                st.write('No frames grabbed!')
+                st.write('Không có khung hình nào!')
                 break
 
             detector.setInputSize((frameWidth, frameHeight))  # Ensure the input size is set correctly
@@ -245,7 +260,7 @@ elif choice == "Detect Face":
                         cv.rectangle(frame, (coords[0], coords[1]), (coords[0]+coords[2], coords[1]+coords[3]), (0, 255, 0), 2)
                     else:
                         coords = face[:-1].astype(np.int32)
-                        cv.putText(frame, 'Unknown', (coords[0], coords[1] - 10), cv.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+                        cv.putText(frame, 'Không rõ', (coords[0], coords[1] - 10), cv.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
                         cv.rectangle(frame, (coords[0], coords[1]), (coords[0]+coords[2], coords[1]+coords[3]), (0, 0, 255), 2)
 
             visualize(frame, faces, tm.getFPS())
@@ -257,16 +272,22 @@ elif choice == "Detect Face":
         cap.release()
         cv.destroyAllWindows()
 
-# Display saved images only if not in detection mode
-if choice != "Detect Face":
-    st.header("View Saved Faces")
+if choice == "Xem Khuôn mặt đã Lưu":
+    st.sidebar.header("Xem Khuôn mặt đã Lưu")
+    st.header("Xem Khuôn mặt đã Lưu")
+    st.write("""
+        ### Hướng dẫn:
+        1. Chọn tên từ danh sách để xem các hình ảnh đã lưu cho khuôn mặt đó.
+        2. Các hình ảnh sẽ được hiển thị bên dưới.
+    """)
+
     if os.path.exists('./data/faces'):
         face_folders = os.listdir('./data/faces')
-        selected_face = st.selectbox("Select a face to view images", face_folders)
+        selected_face = st.sidebar.selectbox("Chọn khuôn mặt để xem hình ảnh", face_folders)
 
         if selected_face:
             folder_path = f"./data/faces/{selected_face}"
-            st.header(f"Images for {selected_face}")
+            st.header(f"Hình ảnh cho {selected_face}")
             col1, col2, col3, col4, col5 = st.columns(5)
             cols = [col1, col2, col3, col4, col5]
             for idx, img in enumerate(os.listdir(folder_path)):
@@ -274,4 +295,4 @@ if choice != "Detect Face":
                 img = Image.open(img_path)
                 cols[idx % 5].image(img, caption=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
     else:
-        st.write("No faces have been trained yet.")
+        st.write("Chưa có khuôn mặt nào được huấn luyện.")
