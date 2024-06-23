@@ -4,7 +4,7 @@ from st_pages import Page, show_pages, add_page_title
 # Optional -- adds the title and icon to the current page
 add_page_title()
 
-# Specify what pages should be shown in the sidebar, and what their titles 
+# Specify what pages should be shown in the sidebar, and what their titles
 # and icons should be
 show_pages(
     [
@@ -12,6 +12,7 @@ show_pages(
         Page("pages/face-detection.py", "Nhận diện khuôn mặt", "🤦"),
         Page("pages/fruit-identification.py", "Nhận diện trái cây", "🍎"),
         Page("pages/recognize-handwritten-digits.py", "Nhận dạng chữ số MNIST", "🖍️"),
+        Page("pages/sample.py", "sample", "🖍️"),
     ]
 )
 
@@ -19,7 +20,7 @@ show_pages(
 st.title("Project digital image processing")
 
 st.write("# Welcome to Streamlit! 👋")
-         
+
 
 st.markdown(
     """
@@ -38,4 +39,3 @@ st.markdown(
     - Explore a [New York City rideshare dataset](https://github.com/streamlit/demo-uber-nyc-pickups)
 """
 )
-
