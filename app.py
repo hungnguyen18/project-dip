@@ -2,7 +2,7 @@ import streamlit as st
 from st_pages import Page, show_pages, add_page_title
 
 # Add the title and icon to the current page
-add_page_title()
+# add_page_title()
 
 # Specify the pages to be shown in the sidebar with titles and icons
 show_pages(
@@ -12,6 +12,7 @@ show_pages(
         Page("pages/fruit-identification.py", "Nhận diện trái cây", "🍎"),
         Page("pages/recognize-handwritten-digits.py", "Nhận dạng chữ số MNIST", "🖍️"),
         Page("pages/digital-image-processing.py", "Xử lý ảnh", "🎞️"),
+        Page("pages/sample.py", "X", "🔥"),
     ]
 )
 

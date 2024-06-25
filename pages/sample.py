@@ -1,123 +1,157 @@
 import streamlit as st
 import numpy as np
 import cv2 as cv
-import os
-from sklearn.preprocessing import LabelEncoder
-from sklearn.svm import SVC
-from sklearn.metrics import accuracy_score
 import joblib
+import os
 from datetime import datetime
 from PIL import Image
+from sklearn.metrics import accuracy_score
+from sklearn.preprocessing import LabelEncoder
+from sklearn.svm import LinearSVC
 
 
+# Class to store metadata for each identity
 class IdentityMetadata:
     def __init__(self, base, name, file):
         self.base = base
         self.name = name
         self.file = file
 
-    def __repr__(self):
-        return self.image_path()
-
     def image_path(self):
         return os.path.join(self.base, self.name, self.file)
 
 
+# Load metadata for images
 def load_metadata(path):
     metadata = []
-    for i in sorted(os.listdir(path)):
-        for f in sorted(os.listdir(os.path.join(path, i))):
-            ext = os.path.splitext(f)[1]
-            if ext == ".jpg" or ext == ".jpeg" or ext == ".bmp":
-                metadata.append(IdentityMetadata(path, i, f))
+    for name in sorted(os.listdir(path)):
+        for file in sorted(os.listdir(os.path.join(path, name))):
+            ext = os.path.splitext(file)[1]
+            if ext.lower() in [".jpg", ".jpeg", ".bmp"]:
+                metadata.append(IdentityMetadata(path, name, file))
     return np.array(metadata)
 
 
-def visualize(input, faces, fps, thickness=2):
+# Load an image using OpenCV
+def load_image(path):
+    img = cv.imread(path, 1)
+    return cv.cvtColor(img, cv.COLOR_BGR2RGB)
+
+
+# Calculate the distance between two embeddings
+def distance(emb1, emb2):
+    return np.sum(np.square(emb1 - emb2))
+
+
+# Visualize detected faces and FPS on the input image
+def visualize(input_img, faces, fps, thickness=2, names=None):
     if faces[1] is not None:
-        for idx, face in enumerate(faces[1]):
+        for i, face in enumerate(faces[1]):
             coords = face[:-1].astype(np.int32)
             cv.rectangle(
-                input,
+                input_img,
                 (coords[0], coords[1]),
                 (coords[0] + coords[2], coords[1] + coords[3]),
                 (0, 255, 0),
                 thickness,
             )
-            cv.circle(input, (coords[4], coords[5]), 2, (255, 0, 0), thickness)
-            cv.circle(input, (coords[6], coords[7]), 2, (0, 0, 255), thickness)
-            cv.circle(input, (coords[8], coords[9]), 2, (0, 255, 0), thickness)
-            cv.circle(input, (coords[10], coords[11]), 2, (255, 0, 255), thickness)
-            cv.circle(input, (coords[12], coords[13]), 2, (0, 255, 255), thickness)
+            for j in range(4, 14, 2):
+                cv.circle(
+                    input_img, (coords[j], coords[j + 1]), 2, (255, 0, 0), thickness
+                )
+            if names and i < len(names):
+                cv.putText(
+                    input_img,
+                    names[i],
+                    (coords[0], coords[1] - 10),
+                    cv.FONT_HERSHEY_SIMPLEX,
+                    0.9,
+                    (36, 255, 12),
+                    2,
+                )
     cv.putText(
-        input, f"FPS: {fps:.2f}", (1, 16), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2
+        input_img,
+        f"FPS: {fps:.2f}",
+        (1, 16),
+        cv.FONT_HERSHEY_SIMPLEX,
+        0.5,
+        (0, 255, 0),
+        2,
     )
 
 
-def train_model(metadata):
-    if len(set(m.name for m in metadata)) < 2:
-        st.error("Need images of at least two different people to train the model.")
-        return
-
-    recognizer = cv.FaceRecognizerSF.create(
-        "./models/face_recognition_sface_2021dec.onnx", ""
-    )
-
+# Train the SVM model using face embeddings
+def train_model(data_path, recognizer):
+    metadata = load_metadata(data_path)
     embedded = np.zeros((metadata.shape[0], 128))
-    progress = st.progress(0)
+
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    progress_step = 100 / metadata.shape[0]
 
     for i, m in enumerate(metadata):
         img = cv.imread(m.image_path(), cv.IMREAD_COLOR)
         face_feature = recognizer.feature(img)
         embedded[i] = face_feature
-        progress.progress(int((i / len(metadata)) * 100))
+
+        # Update progress
+        progress_bar.progress(int(progress_step * (i + 1)))
+        status_text.text(f"Processing image {i + 1} of {metadata.shape[0]}")
 
     targets = np.array([m.name for m in metadata])
     encoder = LabelEncoder()
     encoder.fit(targets)
-
     y = encoder.transform(targets)
 
     train_idx = np.arange(metadata.shape[0]) % 5 != 0
     test_idx = np.arange(metadata.shape[0]) % 5 == 0
-    X_train = embedded[train_idx]
-    X_test = embedded[test_idx]
-    y_train = y[train_idx]
-    y_test = y[test_idx]
+    X_train, X_test = embedded[train_idx], embedded[test_idx]
+    y_train, y_test = y[train_idx], y[test_idx]
 
-    svc = SVC(probability=True)  # Using SVC with probability estimation
+    svc = LinearSVC()
     svc.fit(X_train, y_train)
     acc_svc = accuracy_score(y_test, svc.predict(X_test))
-    st.write(f"SVM accuracy: {acc_svc:.6f}")
-    joblib.dump(svc, "./models/svc.pkl")
-    joblib.dump(encoder, "./models/label_encoder.pkl")
-    st.success("Model training completed and saved.")
-    progress.empty()
+
+    model_path = "./models/svc.pkl"
+    joblib.dump(svc, model_path)
+
+    progress_bar.empty()
+    status_text.text("Training complete!")
+
+    return acc_svc, model_path
 
 
+# Get the list of face folders in the dataset
+def get_face_folders(data_path):
+    return sorted(
+        [d for d in os.listdir(data_path) if os.path.isdir(os.path.join(data_path, d))]
+    )
+
+
+# Save face images captured from the webcam
 def save_face_images(folder_name, cap, detector):
     count = 0
     progress = st.progress(0)
     saved_images = []
     info_message = st.info(
-        "Vui lòng giữ khuôn mặt của bạn trong tầm camera. Nên tạo nhiều kiểu gương mặt khác nhau để tăng chất lượng mô hình."
+        "Please keep your face in the camera's view. Creating various expressions can improve the model's quality."
     )
     success = st.success
-    with st.spinner("Đang lưu ảnh..."):
+    with st.spinner("Saving images..."):
         while count < 150:
             ret, frame = cap.read()
             if not ret:
-                st.write("Không thể chụp khung hình")
+                st.write("Unable to capture frame")
                 break
-            detector.setInputSize((frame.shape[1], frame.shape[0]))  # Update input size
+            detector.setInputSize((frame.shape[1], frame.shape[0]))
             faces = detector.detect(frame)
             if faces[1] is not None:
-                for idx, face in enumerate(faces[1]):
+                for face in faces[1]:
                     coords = face[:-1].astype(np.int32)
-                    x, y, w, h = coords[0], coords[1], coords[2], coords[3]
+                    x, y, w, h = coords[:4]
                     count += 1
                     face_img = frame[y : y + h, x : x + w]
-                    img_name = f"{folder_name}/{str(count)}.jpg"
+                    img_name = f"{folder_name}/{count}.jpg"
                     cv.imwrite(img_name, face_img)
                     saved_images.append(img_name)
                     progress.progress(int((count / 150) * 100))
@@ -125,25 +159,30 @@ def save_face_images(folder_name, cap, detector):
                         break
     cap.release()
     if count >= 150:
-        success("Đã lưu 150 ảnh thành công.")
+        success("Successfully saved 150 images.")
     info_message.empty()
     progress.empty()
     return saved_images
 
 
-# Set up Streamlit app
+# Initialize Streamlit app
 st.set_page_config(page_title="Face Detection and Recognition", layout="wide")
 st.title("Real-Time Face Detection and Recognition")
 
-# Path to models (ensure these paths are correct)
+# Paths to pre-trained models
 face_detection_model_path = "./models/face_detection_yunet_2023mar.onnx"
 face_recognition_model_path = "./models/face_recognition_sface_2021dec.onnx"
 
-# Initialize models
+# Load face detection and recognition models
 detector = cv.FaceDetectorYN.create(
     face_detection_model_path, "", (320, 320), 0.9, 0.3, 5000
 )
 recognizer = cv.FaceRecognizerSF.create(face_recognition_model_path, "")
+
+# Load trained SVM model and face folders
+svc = joblib.load("./models/svc.pkl")
+data_path = "./data/faces"
+mydict = get_face_folders(data_path)
 
 # Streamlit state management
 if "start" not in st.session_state:
@@ -158,6 +197,7 @@ if "saved_images" not in st.session_state:
     st.session_state.saved_images = []
 
 
+# Callback functions for buttons
 def start_button_callback():
     st.session_state.start = True
     st.session_state.stop = False
@@ -166,30 +206,30 @@ def start_button_callback():
 def stop_button_callback():
     st.session_state.stop = True
     st.session_state.start = False
-    st.session_state.save = False
 
 
 def save_button_callback():
     st.session_state.save = True
 
 
+# Reset session state
 def clear_session_state():
     st.session_state.start = False
     st.session_state.stop = True
     st.session_state.save = False
 
 
-# Define tabs
+# Define Streamlit tabs
 tab1, tab2, tab3 = st.tabs(["Training", "Detect Face", "View Saved Images"])
 
 with tab1:
     st.header("Training")
     st.write(
         """
-    - **Bước 1**: Nhấn nút `Start Training` để bắt đầu.
-    - **Bước 2**: Nhấn nút `Save` và nhập tên khuôn mặt để bắt đầu lưu hình ảnh.
-    - **Bước 3**: Camera sẽ chụp 150 tấm hình của khuôn mặt bạn. Vui lòng giữ khuôn mặt trong tầm camera và thay đổi biểu cảm khuôn mặt để cải thiện chất lượng mô hình.
-    - **Bước 4**: Sau khi lưu đủ 150 hình, quá trình huấn luyện mô hình sẽ tự động bắt đầu.
+    - **Step 1**: Press the `Start Training` button to begin.
+    - **Step 2**: Press the `Save` button and enter the face name to start saving images.
+    - **Step 3**: The camera will capture 150 images of your face. Please keep your face in the camera's view and vary expressions to improve model quality.
+    - **Step 4**: After saving 150 images, the model training will automatically start.
     """
     )
     if not st.session_state.start:
@@ -207,7 +247,7 @@ with tab1:
                     save_button_callback()
 
         if st.session_state.save:
-            face_name = st.text_input("Nhập tên khuôn mặt:")
+            face_name = st.text_input("Enter face name:")
             if face_name:
                 st.session_state.face_name = face_name
                 folder_name = f"./data/faces/{face_name}"
@@ -216,23 +256,13 @@ with tab1:
 
                 saved_images = save_face_images(folder_name, cap, detector)
 
-                if saved_images:
-                    # # Hide loading and info, success messages before training
-                    # info_message.empty()
-                    # spinner.empty()
-                    # success_message.empty()
-
-                    # Train the model after saving the images
-                    # Initialize the training_message
-                    training_message = st.empty()
-                    training_message.text("Training started...")
-                    metadata = load_metadata("./data/faces")
-                    train_model(metadata)
-
-                    # Hide training message
-                    training_message.empty()
-
                 st.session_state.save = False
+
+                if saved_images:
+                    st.write("Training the model...")
+                    acc_svc, model_path = train_model("./data/faces", recognizer)
+                    st.write(f"SVM accuracy: {acc_svc:.6f}")
+                    st.write(f"Model saved at: {model_path}")
 
         # Capture from camera
         cap = cv.VideoCapture(0)
@@ -252,57 +282,105 @@ with tab1:
 
                 # Inference
                 tm.start()
-                detector.setInputSize(
-                    (frame.shape[1], frame.shape[0])
-                )  # Update input size
+                detector.setInputSize((frame.shape[1], frame.shape[0]))
                 faces = detector.detect(frame)
                 tm.stop()
 
-                # Draw results on the input image
-                visualize(frame, faces, tm.getFPS())
-
-                # Display frame
+                fps = tm.getFPS()
+                visualize(frame, faces, fps)
                 stframe.image(frame, channels="BGR")
 
             cap.release()
-        else:
-            st.write("Failed to open webcam.")
-
-        # Close OpenCV windows
-        cv.destroyAllWindows()
-        if st.session_state.stop:
-            st.session_state.start = False
-            st.session_state.stop = False
+            cv.destroyAllWindows()
 
 with tab2:
     st.header("Detect Face")
     st.write(
-        "This tab will be used for real-time face detection once the model is trained."
+        """
+    - Press the `Start` button to begin face detection.
+    - Press the `Stop` button to stop detection.
+    """
     )
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if not st.session_state.start:
+            if st.button("Start"):
+                start_button_callback()
+    with col2:
+        if st.session_state.start:
+            if st.button("Stop"):
+                stop_button_callback()
+
     if st.session_state.start:
-        st.write("Please stop training before detecting faces.")
-    else:
-        # Add your face detection code here
-        pass
+        stframe = st.empty()
+        st_fps = st.empty()
+        cap = cv.VideoCapture(0)
+        tm = cv.TickMeter()
+        if cap.isOpened():
+            detector = cv.FaceDetectorYN.create(
+                face_detection_model_path,
+                "",
+                (320, 320),
+                0.9,
+                0.3,
+                5000,
+            )
+            recognizer = cv.FaceRecognizerSF.create(face_recognition_model_path, "")
+
+            frameWidth = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
+            frameHeight = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
+            detector.setInputSize([frameWidth, frameHeight])
+
+            with st.spinner("Detecting faces..."):
+                while not st.session_state.stop:
+                    hasFrame, frame = cap.read()
+                    if not hasFrame:
+                        st.write("No frames grabbed!")
+                        break
+
+                    tm.start()
+                    faces = detector.detect(frame)
+                    tm.stop()
+
+                    names = []
+                    if faces[1] is not None:
+                        for face in faces[1]:
+                            face_align = recognizer.alignCrop(frame, face)
+                            face_feature = recognizer.feature(face_align)
+                            face_feature = face_feature.reshape(1, -1)
+                            test_predict = svc.predict(face_feature)
+                            result = mydict[test_predict[0]]
+                            names.append(result)
+
+                    fps = tm.getFPS()
+                    visualize(frame, faces, fps, names=names)
+                    stframe.image(frame, channels="BGR")
+                    st_fps.text(f"FPS: {fps:.2f}")
+
+            cap.release()
+            cv.destroyAllWindows()
+        else:
+            st.write("Failed to open webcam.")
 
 with tab3:
     st.write(
         """
-        ### Hướng dẫn:
-        1. Chọn tên từ danh sách để xem các hình ảnh đã lưu cho khuôn mặt đó.
-        2. Các hình ảnh sẽ được hiển thị bên dưới.
+        ### Instructions:
+        1. Select a name from the list to view saved images for that face.
+        2. The images will be displayed below.
     """
     )
     if st.session_state.start:
         st.write("Please stop training before viewing saved images.")
     else:
-        if os.path.exists("./data/faces"):
-            face_folders = os.listdir("./data/faces")
-            selected_face = st.selectbox("Chọn khuôn mặt để xem hình ảnh", face_folders)
+        if os.path.exists(data_path):
+            face_folders = os.listdir(data_path)
+            selected_face = st.selectbox("Select face to view images", face_folders)
 
             if selected_face:
-                folder_path = f"./data/faces/{selected_face}"
-                st.header(f"Hình ảnh cho {selected_face}")
+                folder_path = os.path.join(data_path, selected_face)
+                st.header(f"Images for {selected_face}")
                 col1, col2, col3, col4, col5 = st.columns(5)
                 cols = [col1, col2, col3, col4, col5]
                 for idx, img in enumerate(os.listdir(folder_path)):
@@ -312,7 +390,4 @@ with tab3:
                         img, caption=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     )
         else:
-            st.write("Chưa có khuôn mặt nào được train.")
-
-# To run the Streamlit app, save this script and run it using:
-# streamlit run your_script_name.py
+            st.write("No faces trained yet.")
