@@ -1,47 +1,45 @@
 import streamlit as st
 from st_pages import Page, show_pages, add_page_title
 
-# Add the title and icon to the current page
-# add_page_title()
 
-# Specify the pages to be shown in the sidebar with titles and icons
+# Chỉ định các trang để hiển thị trong thanh bên với tiêu đề và biểu tượng
 show_pages(
     [
-        Page("app.py", "Home", "🏠"),
-        Page("pages/face-detection.py", "Nhận diện khuôn mặt", "🤦"),
+        Page("app.py", "Trang chủ", "🏠"),
+        Page("pages/face-detect.py", "Nhận diện khuôn mặt", "🤦"),
         Page("pages/fruit-identification.py", "Nhận diện trái cây", "🍎"),
-        Page("pages/recognize-handwritten-digits.py", "Nhận dạng chữ số MNIST", "🖍️"),
+        Page("pages/recognize-handwritten-digits.py", "Nhận dạng chữ số từ MNIST", "🖍️"),
         Page("pages/digital-image-processing.py", "Xử lý ảnh", "🎞️"),
-        Page("pages/sample.py", "X", "🔥"),
+        Page("pages/style.py", "Chuyển ảnh thành tranh vẽ", "🎨"),
     ]
 )
 
-# Set the title of the main page
-# st.title("Digital Image Processing Project")
 
-# Introduction section
+# Phần giới thiệu
 st.write(
     """
-# Welcome to the Digital Image Processing Project! 👋
+# Dự án kết thúc môn DIP! 🔥
 
-This project demonstrates various applications of digital image processing using Streamlit. You can explore different functionalities through the sidebar.
+Dự án này thể hiện các ứng dụng khác nhau của xử lý ảnh số bằng Streamlit.
 
-### Available Features
-- **Face Recognition**: Recognize faces of at least 5 people.
-- **Object Detection**: Identify 5 types of objects using YOLOv8.
-- **Handwritten Digit Recognition**: Recognize handwritten digits from the MNIST dataset.
-- **Image Processing**: Apply various image processing techniques.
+### Các Chức Năng Có Sẵn
+- **Nhận diện Khuôn mặt**: Nhận diện khuôn mặt của ít nhất 5 người.
+- **Nhận diện Đối tượng**: Nhận biết 5 loại đối tượng sử dụng YOLOv8.
+- **Nhận dạng Chữ số viết tay**: Nhận dạng chữ số viết tay từ bộ dữ liệu MNIST.
+- **Xử lý Ảnh**: Áp dụng các kỹ thuật xử lý ảnh đa dạng.
+- **Chuyển ảnh thành tranh vẽ**: Áp dụng các kỹ thuật xử lý ảnh đa dạng.
 
-### Additional Information
-If you complete all four tasks perfectly, you can earn up to 8 points. Additional tasks related to image processing can earn you extra points, with a maximum of 2 bonus points.
+### Thành viên
+- **Nguyễn Kim Hưng**
+- **Đào Đức Khải**
 
-### Resources
-- [Streamlit Documentation](https://docs.streamlit.io)
-- [Community Forums](https://discuss.streamlit.io)
+### Tài Nguyên
+- [Tài liệu Streamlit](https://docs.streamlit.io)
+- [Diễn đàn cộng đồng](https://discuss.streamlit.io)
 """
 )
 
-# Enhanced UI/UX for main page
+# Giao diện người dùng nâng cao cho trang chính
 st.markdown(
     """
     <style>
@@ -59,14 +57,11 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# st.image("/mnt/data/image.png", caption="Project Overview")
-
-# Footer section with additional links
+# Phần chân trang với các liên kết bổ sung
 st.markdown(
     """
-    ### Learn More
-    - Check out the official [Streamlit website](https://streamlit.io)
-    - Visit our [documentation](https://docs.streamlit.io)
-    - Join the discussion on our [community forums](https://discuss.streamlit.io)
+    ### Tìm Hiểu Thêm
+    - Ghé thăm trang web chính thức của [Streamlit](https://streamlit.io)
+    - Xem tài liệu [ở đây](https://docs.streamlit.io)
     """
 )
